@@ -35,11 +35,6 @@ const char *fragmentSource = R"(
 		vec3 Le, La;
 	};
 
-	struct Sphere {
-		vec3 center;
-		float radius;
-	};
-
 	struct Hit {
 		float t;
 		vec3 position, normal;
@@ -50,6 +45,18 @@ const char *fragmentSource = R"(
 		vec3 start, dir;
 	};
 
+	struct Sphere {
+		vec3 center;
+		float radius;
+	};
+
+	struct Triangle{
+		vec3 p1,p2,p3;
+		vec3 n;
+	};
+
+
+
 	const int nMaxObjects = 500;
 
 	uniform vec3 wEye; 
@@ -57,6 +64,8 @@ const char *fragmentSource = R"(
 	uniform Material materials[2];  // diffuse, specular, ambient ref
 	uniform int nObjects;
 	uniform Sphere objects[nMaxObjects];
+	uniform int nTriangles;
+	uniform Triangle triangles[100];
 
 	in  vec3 p;					// point on camera window corresponding to the pixel
 	out vec4 fragmentColor;		// output that goes to the raster memory as told by glBindFragDataLocation
@@ -110,7 +119,8 @@ const char *fragmentSource = R"(
 		vec3 outRadiance = vec3(0, 0, 0);
 		for(int d = 0; d < maxdepth; d++) {
 			Hit hit = firstIntersect(ray);
-			if (hit.t < 0) return weight * light.La;
+			if (hit.t < 0) 
+				return weight * light.La;
 			if (materials[hit.mat].rough == 1) {
 				outRadiance += weight * materials[hit.mat].ka * light.La;
 				Ray shadowRay;
@@ -139,6 +149,9 @@ const char *fragmentSource = R"(
 		ray.dir = normalize(p - wEye);
 		fragmentColor = vec4(trace(ray), 1); 
 	}
+
+
+
 )";
 
 class Material {
@@ -220,6 +233,29 @@ struct Sphere {
 	}
 };
 
+struct Triangle {
+	vec3 p1, p2, p3;
+	vec3 n;
+
+	Triangle(const vec3& _p1, const vec3& _p2, const vec3& _p3) {
+		p1 = _p1; p2 = _p2; p3 = _p3;
+		n = cross((p2 - p1), (p3 - p1));
+	}
+
+	void SetUniform(unsigned int shaderProg, int o) {
+		char buffer[256];
+		sprintf(buffer, "triangles[%d].p1", o);
+		p1.SetUniform(shaderProg, buffer);
+		sprintf(buffer, "triangles[%d].p2", o);
+		p2.SetUniform(shaderProg, buffer);
+		sprintf(buffer, "triangles[%d].p3", o);
+		p3.SetUniform(shaderProg, buffer);
+		sprintf(buffer, "triangles[%d].n", o);
+		n.SetUniform(shaderProg, buffer);
+	}
+
+};
+
 class Camera {
 	vec3 eye, lookat, right, up;
 	float fov;
@@ -235,8 +271,8 @@ public:
 	}
 	void Animate(float dt) {
 		eye = vec3((eye.x - lookat.x) * cos(dt) + (eye.z - lookat.z) * sin(dt) + lookat.x,
-				   eye.y,
-		  	      -(eye.x - lookat.x) * sin(dt) + (eye.z - lookat.z) * cos(dt) + lookat.z);
+			eye.y,
+			-(eye.x - lookat.x) * sin(dt) + (eye.z - lookat.z) * cos(dt) + lookat.z);
 		set(eye, lookat, up, fov);
 	}
 	void SetUniform(unsigned int shaderProg) {
@@ -264,13 +300,14 @@ struct Light {
 float rnd() { return (float)rand() / RAND_MAX; }
 
 class Scene {
-	std::vector<Sphere *> objects;
-	std::vector<Light *> lights;
+	std::vector<Sphere*> objects;
+	std::vector<Light*> lights;
 	Camera camera;
-	std::vector<Material *> materials;
+	std::vector<Material*> materials;
+	std::vector<Triangle*> triangles;
 public:
 	void build() {
-		vec3 eye = vec3(0, 0, 2);
+		vec3 eye = vec3(0, 0, 11);
 		vec3 vup = vec3(0, 1, 0);
 		vec3 lookat = vec3(0, 0, 0);
 		float fov = 45 * M_PI / 180;
@@ -279,18 +316,26 @@ public:
 		lights.push_back(new Light(vec3(1, 1, 1), vec3(3, 3, 3), vec3(0.4, 0.3, 0.3)));
 
 		vec3 kd(0.3f, 0.2f, 0.1f), ks(10, 10, 10);
-		for (int i = 0; i < 500; i++) objects.push_back(new Sphere(vec3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5), rnd() * 0.1));
-
+		for (int i = 0; i < 500; i++) 
+			objects.push_back(new Sphere(vec3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5), rnd() * 0.1));
+		triangles.push_back(new Triangle(vec3(0, 0, 0), vec3(1, 0, 0), vec3(0, 1, 0)));
 		materials.push_back(new RoughMaterial(kd, ks, 50));
 		materials.push_back(new SmoothMaterial(vec3(0.9, 0.85, 0.8)));
 	}
 	void SetUniform(unsigned int shaderProg) {
 		int location = glGetUniformLocation(shaderProg, "nObjects");
-		if (location >= 0) glUniform1i(location, objects.size()); else printf("uniform nObjects cannot be set\n");
-		for (int o = 0; o < objects.size(); o++) objects[o]->SetUniform(shaderProg, o);
+		if (location >= 0) 
+			glUniform1i(location, objects.size());
+		else 
+			printf("uniform nObjects cannot be set\n");
+		for (int i = 0; i < objects.size(); i++)
+			objects[i]->SetUniform(shaderProg, i);
+
 		lights[0]->SetUniform(shaderProg);
 		camera.SetUniform(shaderProg);
-		for (int mat = 0; mat < materials.size(); mat++) materials[mat]->SetUniform(shaderProg, mat);
+
+		for (int mat = 0; mat < materials.size(); mat++)
+			materials[mat]->SetUniform(shaderProg, mat);
 	}
 	void Animate(float dt) { camera.Animate(dt); }
 };
@@ -369,6 +414,6 @@ void onMouseMotion(int pX, int pY) {
 
 // Idle event indicating that some time elapsed: do animation here
 void onIdle() {
-	scene.Animate(0.01);
+	//scene.Animate(0.01);
 	glutPostRedisplay();
 }
