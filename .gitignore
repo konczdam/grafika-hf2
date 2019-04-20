@@ -31,3 +31,10 @@
 *.out
 *.app
 framework.cpp
+Debug/
+Release/
+*.vcx*
+*.h
+*.log
+*.obj
+*.tlog

@@ -65,7 +65,7 @@ const char *fragmentSource = R"(
 	uniform int nObjects;
 	uniform Sphere objects[nMaxObjects];
 	uniform int nTriangles;
-	uniform Triangle triangles[100];
+	uniform Triangle triangles[50];
 
 	in  vec3 p;					// point on camera window corresponding to the pixel
 	out vec4 fragmentColor;		// output that goes to the raster memory as told by glBindFragDataLocation
@@ -78,25 +78,46 @@ const char *fragmentSource = R"(
 		float b = dot(dist, ray.dir) * 2.0;
 		float c = dot(dist, dist) - object.radius * object.radius;
 		float discr = b * b - 4.0 * a * c;
-		if (discr < 0) return hit;
+		if (discr < 0)
+		   return hit;
 		float sqrt_discr = sqrt(discr);
 		float t1 = (-b + sqrt_discr) / 2.0 / a;	// t1 >= t2 for sure
 		float t2 = (-b - sqrt_discr) / 2.0 / a;
-		if (t1 <= 0) return hit;
+		if (t1 <= 0)
+		   return hit;
 		hit.t = (t2 > 0) ? t2 : t1;
 		hit.position = ray.start + ray.dir * hit.t;
 		hit.normal = (hit.position - object.center) / object.radius;
 		return hit;
 	}
 
+	Hit intersectWithTriangle(const Triangle triangle, const Ray ray){
+		Hit hit;
+		hit.t = -1;
+		hit.t = dot((triangle.p1 - ray.start), triangle.n) / dot(ray.dir, triangle.n);
+		if(hit.t < 0)
+			return hit;
+		hit.position  = ray.start + ray.dir * hit.t;
+		if(dot(cross((triangle.p2 - triangle.p1) ,(hit.position - triangle.p1)), triangle.n) > 0 && 
+		   dot(cross((triangle.p3 - triangle.p2) ,(hit.position - triangle.p2)), triangle.n) > 0 &&
+		   dot(cross((triangle.p1 - triangle.p3) ,(hit.position - triangle.p3)), triangle.n) > 0)
+			return hit;
+		hit.t = -2;
+		return hit;
+}
+
 	Hit firstIntersect(Ray ray) {
 		Hit bestHit;
 		bestHit.t = -1;
 		for (int o = 0; o < nObjects; o++) {
 			Hit hit = intersect(objects[o], ray); //  hit.t < 0 if no intersection
-			if (o < nObjects/2) hit.mat = 0;	 // half of the objects are rough
-			else			    hit.mat = 1;     // half of the objects are reflective
-			if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  bestHit = hit;
+			if (o < nObjects/2)
+			    hit.mat = 0;	 // half of the objects are rough
+			else	
+			    hit.mat = 1;     // half of the objects are reflective
+			
+			if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
+				bestHit = hit;
 		}
 		if (dot(ray.dir, bestHit.normal) > 0) bestHit.normal = bestHit.normal * (-1);
 		return bestHit;
@@ -117,6 +138,10 @@ const char *fragmentSource = R"(
 	vec3 trace(Ray ray) {
 		vec3 weight = vec3(1, 1, 1);
 		vec3 outRadiance = vec3(0, 0, 0);
+		Hit hit2 = intersectWithTriangle(triangles[0], ray);
+		if(hit2.t > 0)
+			return vec3(1.0,0.0,0.0);
+
 		for(int d = 0; d < maxdepth; d++) {
 			Hit hit = firstIntersect(ray);
 			if (hit.t < 0) 
@@ -139,11 +164,12 @@ const char *fragmentSource = R"(
 				weight *= Fresnel(materials[hit.mat].F0, dot(-ray.dir, hit.normal));
 				ray.start = hit.position + hit.normal * epsilon;
 				ray.dir = reflect(ray.dir, hit.normal);
-			} else return outRadiance;
+			} else return outRadiance +  hit2.normal*0.01;
 		}
 	}
 
 	void main() {
+		
 		Ray ray;
 		ray.start = wEye; 
 		ray.dir = normalize(p - wEye);
@@ -222,7 +248,11 @@ struct Sphere {
 	vec3 center;
 	float radius;
 
-	Sphere(const vec3& _center, float _radius) { center = _center; radius = _radius; }
+	Sphere(const vec3& _center, float _radius) { 
+		center = _center; 
+		radius = _radius; 
+	}
+
 	void SetUniform(unsigned int shaderProg, int o) {
 		char buffer[256];
 		sprintf(buffer, "objects[%d].center", o);
@@ -240,6 +270,7 @@ struct Triangle {
 	Triangle(const vec3& _p1, const vec3& _p2, const vec3& _p3) {
 		p1 = _p1; p2 = _p2; p3 = _p3;
 		n = cross((p2 - p1), (p3 - p1));
+		
 	}
 
 	void SetUniform(unsigned int shaderProg, int o) {
@@ -328,16 +359,26 @@ public:
 			glUniform1i(location, objects.size());
 		else 
 			printf("uniform nObjects cannot be set\n");
+
+		 location = glGetUniformLocation(shaderProg, "nTriangles");
+		if (location >= 0)
+			glUniform1i(location, objects.size());
+		else
+			printf("uniform nTriangles cannot be set\n");
 		for (int i = 0; i < objects.size(); i++)
 			objects[i]->SetUniform(shaderProg, i);
 
+		triangles[0]->SetUniform(shaderProg, 0);
 		lights[0]->SetUniform(shaderProg);
 		camera.SetUniform(shaderProg);
 
 		for (int mat = 0; mat < materials.size(); mat++)
 			materials[mat]->SetUniform(shaderProg, mat);
 	}
-	void Animate(float dt) { camera.Animate(dt); }
+	
+	void Animate(float dt) {
+		camera.Animate(dt);
+	}
 };
 
 GPUProgram gpuProgram; // vertex and fragment shaders
