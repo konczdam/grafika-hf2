@@ -64,7 +64,7 @@ const char *fragmentSource = R"(
 	uniform Light light;     
 	uniform Material materials[2];  // diffuse, specular, ambient ref
 	uniform int nObjects;
-	uniform Sphere objects[nMaxObjects];
+	uniform Sphere objects[20];
 	uniform int nTriangles;
 	uniform Triangle triangles[nMaxTriangles];
 
@@ -94,6 +94,7 @@ const char *fragmentSource = R"(
 
 	Hit intersectWithTriangle(const Triangle triangle, const Ray ray){
 		Hit hit;
+		hit.mat = 1;
 		hit.t = -1.0;
 		hit.t = dot((triangle.p1 - ray.start), triangle.n) / dot(ray.dir, triangle.n);
 		if(hit.t < 0.0)
@@ -118,15 +119,35 @@ const char *fragmentSource = R"(
 			
 			if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
 				bestHit = hit;
+		
 		}
-		int egy = 1;
-		const int lol = 1;
-		for(int i = 0; i < nTriangles; i++){
+			
 			Hit hit = intersectWithTriangle(triangles[0], ray);
-			hit.mat = 1;
 			if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
 					bestHit = hit;
-		}
+	
+			hit = intersectWithTriangle(triangles[1], ray);
+				if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
+						bestHit = hit;
+
+			hit = intersectWithTriangle(triangles[2], ray);
+						if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
+								bestHit = hit;
+
+			hit = intersectWithTriangle(triangles[3], ray);
+						if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
+								bestHit = hit;
+
+			hit = intersectWithTriangle(triangles[4], ray);
+						if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
+								bestHit = hit;
+
+			hit = intersectWithTriangle(triangles[5], ray);
+						if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
+								bestHit = hit;
+
+
+
 		if (dot(ray.dir, bestHit.normal) > 0) 
 			bestHit.normal = bestHit.normal * (-1);
 		return bestHit;
@@ -146,7 +167,7 @@ const char *fragmentSource = R"(
 	}
 
 	const float epsilon = 0.0001f;
-	const int maxdepth = 5;
+	const int maxdepth = 12;
 
 	vec3 trace(Ray ray) {
 		vec3 weight = vec3(1, 1, 1);
@@ -185,9 +206,15 @@ const char *fragmentSource = R"(
 	}
 
 	void main() {
-		
+		Triangle tr = triangles[0];
+		vec3 lol;
+		lol+=  triangles[1].p1;
+		lol+=  triangles[2].p1;
+		lol+=  triangles[3].p1;
+		lol+=  triangles[4].p1;
+		lol+=  triangles[5].p1;
 		Ray ray;
-		ray.start = wEye; 
+		ray.start = wEye + 0.00001* lol; 
 		ray.dir = normalize(p - wEye);
 		fragmentColor = vec4(trace(ray), 1); 
 	}
@@ -307,6 +334,10 @@ class Camera {
 	vec3 eye, lookat, right, up;
 	float fov;
 public:
+	vec3 getEye() {
+		return eye;
+	}
+	
 	void set(vec3 _eye, vec3 _lookat, vec3 vup, double _fov) {
 		eye = _eye;
 		lookat = _lookat;
@@ -344,6 +375,7 @@ struct Light {
 	}
 };
 
+
 float rnd() { return (float)rand() / RAND_MAX; }
 
 class Scene {
@@ -353,20 +385,24 @@ class Scene {
 	std::vector<Material*> materials;
 	std::vector<Triangle*> triangles;
 public:
+	Camera getCamera() {
+		return camera;
+	}
+	
 	void build() {
-		vec3 eye = vec3(0, 0, 7);
+		vec3 eye = vec3(0.5, 0.5, 11);
 		vec3 vup = vec3(0, 1, 0);
-		vec3 lookat = vec3(0, 0, 0);
+		vec3 lookat = vec3(0.5, 0.5, 0);
 		float fov = 45 * M_PI / 180;
 		camera.set(eye, lookat, vup, fov);
 
-		lights.push_back(new Light(vec3(-2, 2, 0), vec3(3, 3, 3), vec3(0.4, 0.3, 0.3)));
+		lights.push_back(new Light(vec3(-2, 2, 0), vec3(3, 3, 3), vec3(0.04, 0.03, 0.3)));
 
 		vec3 kd(0.3f, 0.2f, 0.1f), ks(10, 10, 10);
-		for (int i = 0; i < 250; i++) 
-			objects.push_back(new Sphere(vec3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5), rnd() * 0.1));
-		triangles.push_back(new Triangle(vec3(1, 0, -1), vec3(2, 0, 3), vec3(0, 5, 0)));
-		triangles.push_back(new Triangle(vec3(-1, 0, -2), vec3(-2, 0, -3), vec3(0, -5, 0)));
+		//for (int i = 0; i < 250; i++) 
+			objects.push_back(new Sphere(vec3(0.5, 0.5, 0),  0.3));
+		/*triangles.push_back(new Triangle(vec3(1, 0, -1), vec3(2, 0, 3), vec3(0, 5, 0)));
+		triangles.push_back(new Triangle(vec3(-1, 0, -2), vec3(-2, 0, -3), vec3(0, -5, 0)));*/
 		materials.push_back(new RoughMaterial(kd, ks, 50));
 		materials.push_back(new SmoothMaterial(vec3(0.9, 0.85, 0.8)));
 	}
@@ -378,16 +414,16 @@ public:
 			printf("uniform nObjects cannot be set\n");
 
 		
-		location = glGetUniformLocation(shaderProg, "nTriangles");
+		/*location = glGetUniformLocation(shaderProg, "nTriangles");
 		if (location >= 0)
 			glUniform1i(location, triangles.size());
 		else
-			printf("uniform nTriangles cannot be set\n");
+			printf("uniform nTriangles cannot be set\n");*/
 		
 		for (int i = 0; i < objects.size(); i++)
 			objects[i]->SetUniform(shaderProg, i);
 
-		triangles[0]->SetUniform(shaderProg, 0);
+		//triangles[0]->SetUniform(shaderProg, 0);
 		lights[0]->SetUniform(shaderProg);
 		camera.SetUniform(shaderProg);
 
@@ -403,6 +439,44 @@ public:
 GPUProgram gpuProgram; // vertex and fragment shaders
 Scene scene;
 
+class MirrorSystemManager {
+	int n = 3;
+	const int minN = 3;
+	const int maxN = 10;
+	std::vector<Triangle*> triangles;
+
+public:
+	void build() {
+		triangles.clear();
+		const float z0 = 0.5f;
+		const float z1 = scene.getCamera().getEye().z;
+		const float r = 0.7f;
+		const vec2 centre = vec2(0.5f, 0.5f);
+		const float offset = 2 * M_PI / n;
+		for (int i = 0; i < n; i++) {
+			const float x0 = cosf(i*offset)*r + centre.x;
+			const float x1 = x0;
+			const float x2 = cosf((i+1)*offset)*r + centre.x;
+			const float y0 = sinf(i*offset)*r + centre.y;
+			const float y1 = y0;
+			const float y2 = sinf((i + 1)*offset)*r + centre.y;
+			triangles.push_back(new Triangle(vec3(x0, y0, z0), vec3(x1, y1, z1), vec3(x2, y2, z1)));
+			triangles.push_back(new Triangle(vec3(x2, y2, z0), vec3(x0, y0, z0), vec3(x2, y2, z1)));
+		}
+	}
+
+	void SetUniform(unsigned int shaderProg) {
+		int location = glGetUniformLocation(shaderProg, "nTriangles");
+		if (location >= 0)
+			glUniform1i(location, triangles.size());
+		else
+			printf("uniform nTriangles cannot be set\n");
+
+		printf("sizeof triangles: %d\n", triangles.size());
+		for(int i = 0; i < triangles.size(); i++)
+			triangles[i]->SetUniform(shaderProg, i);
+	}
+};
 class FullScreenTexturedQuad {
 	unsigned int vao;	// vertex array object id and texture id
 public:
@@ -428,11 +502,12 @@ public:
 };
 
 FullScreenTexturedQuad fullScreenTexturedQuad;
-
+MirrorSystemManager mrs;
 // Initialization, create an OpenGL context
 void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
 	scene.build();
+	mrs.build();
 	fullScreenTexturedQuad.Create();
 
 	// create program for the GPU
@@ -452,6 +527,7 @@ void onDisplay() {
 	glClearColor(1.0f, 0.5f, 0.8f, 1.0f);							// background color 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the screen
 	scene.SetUniform(gpuProgram.getId());
+	mrs.SetUniform(gpuProgram.getId());
 	fullScreenTexturedQuad.Draw();
 	glutSwapBuffers();									// exchange the two buffers
 }
