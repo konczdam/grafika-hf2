@@ -27,7 +27,7 @@ const char *fragmentSource = R"(
 		vec3 ka, kd, ks;
 		float  shininess;
 		vec3 F0;
-		int rough, reflective;
+		bool rough, reflective;
 	};
 
 	struct Light {
@@ -65,7 +65,7 @@ const char *fragmentSource = R"(
 	uniform int nObjects;
 	uniform Sphere objects[nMaxObjects];
 	uniform int nTriangles;
-	uniform Triangle triangles[50];
+	uniform Triangle triangles[20];
 
 	in  vec3 p;					// point on camera window corresponding to the pixel
 	out vec4 fragmentColor;		// output that goes to the raster memory as told by glBindFragDataLocation
@@ -91,18 +91,19 @@ const char *fragmentSource = R"(
 		return hit;
 	}
 
-	Hit intersectWithTriangle(const Triangle triangle, const Ray ray){
+	Hit intersectWithTriangle( Triangle triangle,  Ray ray){
 		Hit hit;
-		hit.t = -1;
+		hit.t = -1.0;
 		hit.t = dot((triangle.p1 - ray.start), triangle.n) / dot(ray.dir, triangle.n);
-		if(hit.t < 0)
+		if(hit.t < 0.0)
 			return hit;
 		hit.position  = ray.start + ray.dir * hit.t;
-		if(dot(cross((triangle.p2 - triangle.p1) ,(hit.position - triangle.p1)), triangle.n) > 0 && 
-		   dot(cross((triangle.p3 - triangle.p2) ,(hit.position - triangle.p2)), triangle.n) > 0 &&
-		   dot(cross((triangle.p1 - triangle.p3) ,(hit.position - triangle.p3)), triangle.n) > 0)
+		hit.normal = triangle.n;
+		if(dot(cross((triangle.p2 - triangle.p1) ,(hit.position - triangle.p1)), triangle.n) > 0.0 && 
+		   dot(cross((triangle.p3 - triangle.p2) ,(hit.position - triangle.p2)), triangle.n) > 0.0 &&
+		   dot(cross((triangle.p1 - triangle.p3) ,(hit.position - triangle.p3)), triangle.n) > 0.0)
 			return hit;
-		hit.t = -2;
+		hit.t = -2.0;
 		return hit;
 }
 
@@ -119,12 +120,21 @@ const char *fragmentSource = R"(
 			if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
 				bestHit = hit;
 		}
+		int lol = 1;
+		for(int i = 0; i < nTriangles; i++){
+			Hit hit = intersectWithTriangle(triangles[0], ray);
+			hit.mat = 1;
+		if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
+				bestHit = hit;
+		}
 		if (dot(ray.dir, bestHit.normal) > 0) bestHit.normal = bestHit.normal * (-1);
 		return bestHit;
 	}
 
 	bool shadowIntersect(Ray ray) {	// for directional lights
-		for (int o = 0; o < nObjects; o++) if (intersect(objects[o], ray).t > 0) return true; //  hit.t < 0 if no intersection
+		for (int o = 0; o < nObjects; o++) 
+			if (intersect(objects[o], ray).t > 0)
+			   return true; //  hit.t < 0 if no intersection
 		return false;
 	}
 
@@ -133,20 +143,20 @@ const char *fragmentSource = R"(
 	}
 
 	const float epsilon = 0.0001f;
-	const int maxdepth = 5;
+	const int maxdepth = 15;
 
 	vec3 trace(Ray ray) {
 		vec3 weight = vec3(1, 1, 1);
-		vec3 outRadiance = vec3(0, 0, 0);
-		Hit hit2 = intersectWithTriangle(triangles[0], ray);
-		if(hit2.t > 0)
-			return vec3(1.0,0.0,0.0);
+		vec3 outRadiance = vec3(0.0, 0.0, 0.0);
+		//Hit hit2 = intersectWithTriangle(triangles[0], ray);
+		//if(hit2.t > 0)
+			//return vec3(1.0,0.0,0.0);
 
 		for(int d = 0; d < maxdepth; d++) {
 			Hit hit = firstIntersect(ray);
 			if (hit.t < 0) 
 				return weight * light.La;
-			if (materials[hit.mat].rough == 1) {
+			if (materials[hit.mat].rough) {
 				outRadiance += weight * materials[hit.mat].ka * light.La;
 				Ray shadowRay;
 				shadowRay.start = hit.position + hit.normal * epsilon;
@@ -156,16 +166,21 @@ const char *fragmentSource = R"(
 					outRadiance += weight * light.Le * materials[hit.mat].kd * cosTheta;
 					vec3 halfway = normalize(-ray.dir + light.direction);
 					float cosDelta = dot(hit.normal, halfway);
-					if (cosDelta > 0) outRadiance += weight * light.Le * materials[hit.mat].ks * pow(cosDelta, materials[hit.mat].shininess);
+					if (cosDelta > 0)
+					 outRadiance += weight * light.Le * materials[hit.mat].ks * pow(cosDelta, materials[hit.mat].shininess);
 				}
+				break;
 			}
 
-			if (materials[hit.mat].reflective == 1) {
+			if (materials[hit.mat].reflective) {
 				weight *= Fresnel(materials[hit.mat].F0, dot(-ray.dir, hit.normal));
 				ray.start = hit.position + hit.normal * epsilon;
 				ray.dir = reflect(ray.dir, hit.normal);
-			} else return outRadiance +  hit2.normal*0.01;
+				outRadiance += light.La;
+			} 
+			//else 
 		}
+				return outRadiance;
 	}
 
 	void main() {
@@ -338,18 +353,18 @@ class Scene {
 	std::vector<Triangle*> triangles;
 public:
 	void build() {
-		vec3 eye = vec3(0, 0, 11);
+		vec3 eye = vec3(0, 0, 7);
 		vec3 vup = vec3(0, 1, 0);
 		vec3 lookat = vec3(0, 0, 0);
 		float fov = 45 * M_PI / 180;
 		camera.set(eye, lookat, vup, fov);
 
-		lights.push_back(new Light(vec3(1, 1, 1), vec3(3, 3, 3), vec3(0.4, 0.3, 0.3)));
+		lights.push_back(new Light(vec3(-2, 2, 0), vec3(3, 3, 3), vec3(0.4, 0.3, 0.3)));
 
 		vec3 kd(0.3f, 0.2f, 0.1f), ks(10, 10, 10);
 		for (int i = 0; i < 500; i++) 
 			objects.push_back(new Sphere(vec3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5), rnd() * 0.1));
-		triangles.push_back(new Triangle(vec3(0, 0, 0), vec3(1, 0, 0), vec3(0, 1, 0)));
+		triangles.push_back(new Triangle(vec3(1, 0, 0), vec3(2, 0, 3), vec3(0, 5, 0)));
 		materials.push_back(new RoughMaterial(kd, ks, 50));
 		materials.push_back(new SmoothMaterial(vec3(0.9, 0.85, 0.8)));
 	}
@@ -360,11 +375,13 @@ public:
 		else 
 			printf("uniform nObjects cannot be set\n");
 
-		 location = glGetUniformLocation(shaderProg, "nTriangles");
+		
+		location = glGetUniformLocation(shaderProg, "nTriangles");
 		if (location >= 0)
-			glUniform1i(location, objects.size());
+			glUniform1i(location, triangles.size());
 		else
 			printf("uniform nTriangles cannot be set\n");
+		
 		for (int i = 0; i < objects.size(); i++)
 			objects[i]->SetUniform(shaderProg, i);
 
@@ -421,6 +438,7 @@ void onInitialization() {
 	gpuProgram.Use();
 }
 
+bool rotate = false;
 // Window has become invalid: Redraw
 void onDisplay() {
 	static int nFrames = 0;
@@ -438,6 +456,9 @@ void onDisplay() {
 
 // Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
+	if (key == ' ') {
+		rotate = !rotate;
+	}
 }
 
 // Key of ASCII code released
@@ -455,6 +476,7 @@ void onMouseMotion(int pX, int pY) {
 
 // Idle event indicating that some time elapsed: do animation here
 void onIdle() {
-	//scene.Animate(0.01);
+	if(rotate)
+		scene.Animate(0.01);
 	glutPostRedisplay();
 }
