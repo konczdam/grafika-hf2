@@ -58,6 +58,7 @@ const char *fragmentSource = R"(
 
 
 	const int nMaxObjects = 500;
+	const int nMaxTriangles = 20;
 
 	uniform vec3 wEye; 
 	uniform Light light;     
@@ -65,7 +66,7 @@ const char *fragmentSource = R"(
 	uniform int nObjects;
 	uniform Sphere objects[nMaxObjects];
 	uniform int nTriangles;
-	uniform Triangle triangles[20];
+	uniform Triangle triangles[nMaxTriangles];
 
 	in  vec3 p;					// point on camera window corresponding to the pixel
 	out vec4 fragmentColor;		// output that goes to the raster memory as told by glBindFragDataLocation
@@ -91,7 +92,7 @@ const char *fragmentSource = R"(
 		return hit;
 	}
 
-	Hit intersectWithTriangle( Triangle triangle,  Ray ray){
+	Hit intersectWithTriangle(const Triangle triangle, const Ray ray){
 		Hit hit;
 		hit.t = -1.0;
 		hit.t = dot((triangle.p1 - ray.start), triangle.n) / dot(ray.dir, triangle.n);
@@ -112,22 +113,22 @@ const char *fragmentSource = R"(
 		bestHit.t = -1;
 		for (int o = 0; o < nObjects; o++) {
 			Hit hit = intersect(objects[o], ray); //  hit.t < 0 if no intersection
-			if (o < nObjects/2)
-			    hit.mat = 0;	 // half of the objects are rough
-			else	
-			    hit.mat = 1;     // half of the objects are reflective
+		    hit.mat = 0;	 
+		
 			
 			if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
 				bestHit = hit;
 		}
-		int lol = 1;
+		int egy = 1;
+		const int lol = 1;
 		for(int i = 0; i < nTriangles; i++){
 			Hit hit = intersectWithTriangle(triangles[0], ray);
 			hit.mat = 1;
-		if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
-				bestHit = hit;
+			if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
+					bestHit = hit;
 		}
-		if (dot(ray.dir, bestHit.normal) > 0) bestHit.normal = bestHit.normal * (-1);
+		if (dot(ray.dir, bestHit.normal) > 0) 
+			bestHit.normal = bestHit.normal * (-1);
 		return bestHit;
 	}
 
@@ -135,6 +136,8 @@ const char *fragmentSource = R"(
 		for (int o = 0; o < nObjects; o++) 
 			if (intersect(objects[o], ray).t > 0)
 			   return true; //  hit.t < 0 if no intersection
+		 if(intersectWithTriangle(triangles[0], ray).t > 0)
+			return true;
 		return false;
 	}
 
@@ -282,7 +285,7 @@ struct Triangle {
 
 	Triangle(const vec3& _p1, const vec3& _p2, const vec3& _p3) {
 		p1 = _p1; p2 = _p2; p3 = _p3;
-		n = cross((p2 - p1), (p3 - p1));
+		n = normalize(cross((p2 - p1), (p3 - p1)));
 		
 	}
 
@@ -360,9 +363,10 @@ public:
 		lights.push_back(new Light(vec3(-2, 2, 0), vec3(3, 3, 3), vec3(0.4, 0.3, 0.3)));
 
 		vec3 kd(0.3f, 0.2f, 0.1f), ks(10, 10, 10);
-		for (int i = 0; i < 500; i++) 
+		for (int i = 0; i < 250; i++) 
 			objects.push_back(new Sphere(vec3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5), rnd() * 0.1));
 		triangles.push_back(new Triangle(vec3(1, 0, -1), vec3(2, 0, 3), vec3(0, 5, 0)));
+		triangles.push_back(new Triangle(vec3(-1, 0, -2), vec3(-2, 0, -3), vec3(0, -5, 0)));
 		materials.push_back(new RoughMaterial(kd, ks, 50));
 		materials.push_back(new SmoothMaterial(vec3(0.9, 0.85, 0.8)));
 	}
