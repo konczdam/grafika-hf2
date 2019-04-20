@@ -143,19 +143,17 @@ const char *fragmentSource = R"(
 	}
 
 	const float epsilon = 0.0001f;
-	const int maxdepth = 15;
+	const int maxdepth = 5;
 
 	vec3 trace(Ray ray) {
 		vec3 weight = vec3(1, 1, 1);
 		vec3 outRadiance = vec3(0.0, 0.0, 0.0);
-		//Hit hit2 = intersectWithTriangle(triangles[0], ray);
-		//if(hit2.t > 0)
-			//return vec3(1.0,0.0,0.0);
+
 
 		for(int d = 0; d < maxdepth; d++) {
 			Hit hit = firstIntersect(ray);
 			if (hit.t < 0) 
-				return weight * light.La;
+				break;
 			if (materials[hit.mat].rough) {
 				outRadiance += weight * materials[hit.mat].ka * light.La;
 				Ray shadowRay;
@@ -364,7 +362,7 @@ public:
 		vec3 kd(0.3f, 0.2f, 0.1f), ks(10, 10, 10);
 		for (int i = 0; i < 500; i++) 
 			objects.push_back(new Sphere(vec3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5), rnd() * 0.1));
-		triangles.push_back(new Triangle(vec3(1, 0, 0), vec3(2, 0, 3), vec3(0, 5, 0)));
+		triangles.push_back(new Triangle(vec3(1, 0, -1), vec3(2, 0, 3), vec3(0, 5, 0)));
 		materials.push_back(new RoughMaterial(kd, ks, 50));
 		materials.push_back(new SmoothMaterial(vec3(0.9, 0.85, 0.8)));
 	}
