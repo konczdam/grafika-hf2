@@ -58,7 +58,7 @@ const char *fragmentSource = R"(
 
 
 	const int nMaxObjects = 500;
-	const int nMaxTriangles = 20;
+	const int nMaxTriangles = 40;
 
 	uniform vec3 wEye; 
 	uniform Light light;     
@@ -122,29 +122,12 @@ const char *fragmentSource = R"(
 		
 		}
 			
-			Hit hit = intersectWithTriangle(triangles[0], ray);
-			if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
-					bestHit = hit;
-	
-			hit = intersectWithTriangle(triangles[1], ray);
-				if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
-						bestHit = hit;
-
-			hit = intersectWithTriangle(triangles[2], ray);
+		for(int i = 0; i < nTriangles; i++){
+			Hit hit = intersectWithTriangle(triangles[i], ray);
 						if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
 								bestHit = hit;
+		}			
 
-			hit = intersectWithTriangle(triangles[3], ray);
-						if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
-								bestHit = hit;
-
-			hit = intersectWithTriangle(triangles[4], ray);
-						if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
-								bestHit = hit;
-
-			hit = intersectWithTriangle(triangles[5], ray);
-						if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
-								bestHit = hit;
 
 
 
@@ -157,9 +140,11 @@ const char *fragmentSource = R"(
 		for (int o = 0; o < nObjects; o++) 
 			if (intersect(objects[o], ray).t > 0)
 			   return true; //  hit.t < 0 if no intersection
-		 if(intersectWithTriangle(triangles[0], ray).t > 0)
-			return true;
-		return false;
+		 for (int o = 0; o < nObjects; o++) {
+			if(intersectWithTriangle(triangles[o], ray).t > 0)
+				return true;
+			return false;
+		}
 	}
 
 	vec3 Fresnel(vec3 F0, float cosTheta) { 
@@ -167,17 +152,22 @@ const char *fragmentSource = R"(
 	}
 
 	const float epsilon = 0.0001f;
-	const int maxdepth = 12;
+	const int maxdepth = 15;
 
 	vec3 trace(Ray ray) {
 		vec3 weight = vec3(1, 1, 1);
 		vec3 outRadiance = vec3(0.0, 0.0, 0.0);
-
+		int n = 0;
 
 		for(int d = 0; d < maxdepth; d++) {
 			Hit hit = firstIntersect(ray);
-			if (hit.t < 0) 
+			if (hit.t < 0) {
+				//outRadiance += light.La;
+				//outRadiance += weight * (3*(14-n))/14.0 * light.La;
+				outRadiance += weight *  light.La;
+				//outRadiance += weight * light.Le * materials[hit.mat].ks;
 				break;
+				}
 			if (materials[hit.mat].rough) {
 				outRadiance += weight * materials[hit.mat].ka * light.La;
 				Ray shadowRay;
@@ -198,7 +188,8 @@ const char *fragmentSource = R"(
 				weight *= Fresnel(materials[hit.mat].F0, dot(-ray.dir, hit.normal));
 				ray.start = hit.position + hit.normal * epsilon;
 				ray.dir = reflect(ray.dir, hit.normal);
-				outRadiance += light.La;
+				//outRadiance += light.La * 0.09;
+				n++;
 			} 
 			//else 
 		}
@@ -206,15 +197,9 @@ const char *fragmentSource = R"(
 	}
 
 	void main() {
-		Triangle tr = triangles[0];
-		vec3 lol;
-		lol+=  triangles[1].p1;
-		lol+=  triangles[2].p1;
-		lol+=  triangles[3].p1;
-		lol+=  triangles[4].p1;
-		lol+=  triangles[5].p1;
+
 		Ray ray;
-		ray.start = wEye + 0.00001* lol; 
+		ray.start = wEye; 
 		ray.dir = normalize(p - wEye);
 		fragmentColor = vec4(trace(ray), 1); 
 	}
@@ -230,19 +215,7 @@ protected:
 	vec3 F0;
 	bool rough, reflective;
 public:
-	Material RoughMaterial(vec3 _kd, vec3 _ks, float _shininess) {
-		ka = _kd * M_PI;
-		kd = _kd;
-		ks = _ks;
-		shininess = _shininess;
-		rough = true;
-		reflective = false;
-	}
-	Material SmoothMaterial(vec3 _F0) {
-		F0 = _F0;
-		rough = false;
-		reflective = true;
-	}
+	
 	void SetUniform(unsigned int shaderProg, int mat) {
 		char buffer[256];
 		sprintf(buffer, "materials[%d].ka", mat);
@@ -286,6 +259,19 @@ public:
 		reflective = true;
 	}
 };
+
+vec3 calculateF0(vec3 n, vec3 k) {
+	vec3 res;
+	res.x = (powf(n.x - 1.0f, 2.0f) + powf(k.x, 2.0f)) / (powf(n.x + 1.0f, 2.0f) + powf(k.x, 2.0f));
+	res.y = (powf(n.y - 1.0f, 2.0f) + powf(k.y, 2.0f)) / (powf(n.y + 1.0f, 2.0f) + powf(k.y, 2.0f));
+	res.z = (powf(n.z - 1.0f, 2.0f) + powf(k.z, 2.0f)) / (powf(n.z + 1.0f, 2.0f) + powf(k.z, 2.0f));
+	return res;
+}
+
+SmoothMaterial* Gold() {
+	vec3 F0 = calculateF0(vec3(0.17f, 0.35f, 1.5f), vec3(3.1f, 2.7f, 1.9f));
+	return new SmoothMaterial(F0);
+}
 
 struct Sphere {
 	vec3 center;
@@ -396,15 +382,15 @@ public:
 		float fov = 45 * M_PI / 180;
 		camera.set(eye, lookat, vup, fov);
 
-		lights.push_back(new Light(vec3(-2, 2, 0), vec3(3, 3, 3), vec3(0.04, 0.03, 0.3)));
+		lights.push_back(new Light(vec3(-2, 2, 0), vec3(1, 1, 1), vec3(0.9, 0.9, 0.9)));
 
-		vec3 kd(0.3f, 0.2f, 0.1f), ks(10, 10, 10);
-		//for (int i = 0; i < 250; i++) 
-			objects.push_back(new Sphere(vec3(0.5, 0.5, 0),  0.3));
-		/*triangles.push_back(new Triangle(vec3(1, 0, -1), vec3(2, 0, 3), vec3(0, 5, 0)));
-		triangles.push_back(new Triangle(vec3(-1, 0, -2), vec3(-2, 0, -3), vec3(0, -5, 0)));*/
+		vec3 kd(0.3f, 0.2f, 0.1f);
+		vec3 ks(1, 1, 1);
 		materials.push_back(new RoughMaterial(kd, ks, 50));
-		materials.push_back(new SmoothMaterial(vec3(0.9, 0.85, 0.8)));
+		materials.push_back(Gold());
+		//for (int i = 0; i < 250; i++) 
+			objects.push_back(new Sphere(vec3(0.5, 0.5, 0),  0.2));
+		//materials.push_back(new SmoothMaterial(vec3(0.9, 0.85, 0.8)));
 	}
 	void SetUniform(unsigned int shaderProg) {
 		int location = glGetUniformLocation(shaderProg, "nObjects");
@@ -414,16 +400,9 @@ public:
 			printf("uniform nObjects cannot be set\n");
 
 		
-		/*location = glGetUniformLocation(shaderProg, "nTriangles");
-		if (location >= 0)
-			glUniform1i(location, triangles.size());
-		else
-			printf("uniform nTriangles cannot be set\n");*/
-		
 		for (int i = 0; i < objects.size(); i++)
 			objects[i]->SetUniform(shaderProg, i);
 
-		//triangles[0]->SetUniform(shaderProg, 0);
 		lights[0]->SetUniform(shaderProg);
 		camera.SetUniform(shaderProg);
 
@@ -441,16 +420,16 @@ Scene scene;
 
 class MirrorSystemManager {
 	int n = 3;
-	const int minN = 3;
-	const int maxN = 10;
+	const float r = 0.55f;
 	std::vector<Triangle*> triangles;
 
 public:
 	void build() {
 		triangles.clear();
+		const int minN = 3;
+		const int maxN = 10;
 		const float z0 = 0.5f;
 		const float z1 = scene.getCamera().getEye().z;
-		const float r = 0.7f;
 		const vec2 centre = vec2(0.5f, 0.5f);
 		const float offset = 2 * M_PI / n;
 		for (int i = 0; i < n; i++) {
@@ -463,6 +442,13 @@ public:
 			triangles.push_back(new Triangle(vec3(x0, y0, z0), vec3(x1, y1, z1), vec3(x2, y2, z1)));
 			triangles.push_back(new Triangle(vec3(x2, y2, z0), vec3(x0, y0, z0), vec3(x2, y2, z1)));
 		}
+
+	}
+		void increaseN() {
+			if (n < 20) {
+				n++;
+				build();
+			}
 	}
 
 	void SetUniform(unsigned int shaderProg) {
@@ -472,7 +458,6 @@ public:
 		else
 			printf("uniform nTriangles cannot be set\n");
 
-		printf("sizeof triangles: %d\n", triangles.size());
 		for(int i = 0; i < triangles.size(); i++)
 			triangles[i]->SetUniform(shaderProg, i);
 	}
@@ -537,22 +522,15 @@ void onKeyboard(unsigned char key, int pX, int pY) {
 	if (key == ' ') {
 		rotate = !rotate;
 	}
+	if (key == 'a') {
+		mrs.increaseN();
+	}
 }
 
-// Key of ASCII code released
-void onKeyboardUp(unsigned char key, int pX, int pY) {
+void onKeyboardUp(unsigned char key, int pX, int pY) {}
+void onMouse(int button, int state, int pX, int pY) {}
+void onMouseMotion(int pX, int pY) {}
 
-}
-
-// Mouse click event
-void onMouse(int button, int state, int pX, int pY) {
-}
-
-// Move mouse with key pressed
-void onMouseMotion(int pX, int pY) {
-}
-
-// Idle event indicating that some time elapsed: do animation here
 void onIdle() {
 	if(rotate)
 		scene.Animate(0.01);
