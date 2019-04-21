@@ -5,7 +5,7 @@
 
 // vertex shader in GLSL
 const char *vertexSource = R"(
-	#version 450
+	#version 330
     precision highp float;
 
 	uniform vec3 wLookAt, wRight, wUp;          // pos of eye
@@ -20,7 +20,7 @@ const char *vertexSource = R"(
 )";
 // fragment shader in GLSL
 const char *fragmentSource = R"(
-	#version 450
+	#version 330
     precision highp float;
 
 	struct Material {
@@ -62,10 +62,11 @@ const char *fragmentSource = R"(
 
 	uniform vec3 wEye; 
 	uniform Light light;     
-	uniform Material materials[2];  // diffuse, specular, ambient ref
+	uniform Material materials[5];  // diffuse, specular, ambient ref
 	uniform int nObjects;
 	uniform Sphere objects[20];
 	uniform int nTriangles;
+	uniform int mirrorType;
 	uniform Triangle triangles[nMaxTriangles];
 
 	in  vec3 p;					// point on camera window corresponding to the pixel
@@ -94,7 +95,7 @@ const char *fragmentSource = R"(
 
 	Hit intersectWithTriangle(const Triangle triangle, const Ray ray){
 		Hit hit;
-		hit.mat = 1;
+		hit.mat = mirrorType;
 		hit.t = -1.0;
 		hit.t = dot((triangle.p1 - ray.start), triangle.n) / dot(ray.dir, triangle.n);
 		if(hit.t < 0.0)
@@ -114,7 +115,7 @@ const char *fragmentSource = R"(
 		bestHit.t = -1;
 		for (int o = 0; o < nObjects; o++) {
 			Hit hit = intersect(objects[o], ray); //  hit.t < 0 if no intersection
-		    hit.mat = 0;	 
+		    hit.mat = o + 2;	 
 		
 			
 			if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t))  
@@ -143,8 +144,8 @@ const char *fragmentSource = R"(
 		 for (int o = 0; o < nObjects; o++) {
 			if(intersectWithTriangle(triangles[o], ray).t > 0)
 				return true;
-			return false;
 		}
+			return false;
 	}
 
 	vec3 Fresnel(vec3 F0, float cosTheta) { 
@@ -152,7 +153,7 @@ const char *fragmentSource = R"(
 	}
 
 	const float epsilon = 0.0001f;
-	const int maxdepth = 15;
+	const int maxdepth = 16;
 
 	vec3 trace(Ray ray) {
 		vec3 weight = vec3(1, 1, 1);
@@ -162,10 +163,7 @@ const char *fragmentSource = R"(
 		for(int d = 0; d < maxdepth; d++) {
 			Hit hit = firstIntersect(ray);
 			if (hit.t < 0) {
-				//outRadiance += light.La;
-				//outRadiance += weight * (3*(14-n))/14.0 * light.La;
 				outRadiance += weight *  light.La;
-				//outRadiance += weight * light.Le * materials[hit.mat].ks;
 				break;
 				}
 			if (materials[hit.mat].rough) {
@@ -191,9 +189,8 @@ const char *fragmentSource = R"(
 				//outRadiance += light.La * 0.09;
 				n++;
 			} 
-			//else 
 		}
-				return outRadiance;
+		return outRadiance;
 	}
 
 	void main() {
@@ -249,6 +246,16 @@ public:
 		rough = true;
 		reflective = false;
 	}
+	
+	RoughMaterial(vec3 _ka, vec3 _kd, vec3 _ks, float _shininess) {
+		ka = _ka;
+		kd = _kd;
+		ks = _ks;
+		shininess = _shininess;
+		rough = true;
+		reflective = false;
+	}
+
 };
 
 class SmoothMaterial : public Material {
@@ -272,6 +279,16 @@ SmoothMaterial* Gold() {
 	vec3 F0 = calculateF0(vec3(0.17f, 0.35f, 1.5f), vec3(3.1f, 2.7f, 1.9f));
 	return new SmoothMaterial(F0);
 }
+
+SmoothMaterial* Silver() {
+	vec3 F0 = calculateF0(vec3(0.14f, 0.16f, 0.13f), vec3(4.1f, 2.3f, 3.1f));
+	return new SmoothMaterial(F0);
+}
+
+enum mirrorType {
+	GOLD = 0,
+	SILVER = 1
+};
 
 struct Sphere {
 	vec3 center;
@@ -316,6 +333,14 @@ struct Triangle {
 
 };
 
+void setMirrorMaterial(mirrorType asd, unsigned int shaderProg) {
+	int location = glGetUniformLocation(shaderProg, "mirrorType");
+	if (location >= 0)
+		glUniform1i(location, asd);
+	else
+		printf("uniform mirrorType cannot be set\n");
+}
+
 class Camera {
 	vec3 eye, lookat, right, up;
 	float fov;
@@ -335,8 +360,8 @@ public:
 	}
 	void Animate(float dt) {
 		eye = vec3((eye.x - lookat.x) * cos(dt) + (eye.z - lookat.z) * sin(dt) + lookat.x,
-			eye.y,
-			-(eye.x - lookat.x) * sin(dt) + (eye.z - lookat.z) * cos(dt) + lookat.z);
+					eye.y,
+					-(eye.x - lookat.x) * sin(dt) + (eye.z - lookat.z) * cos(dt) + lookat.z);
 		set(eye, lookat, up, fov);
 	}
 	void SetUniform(unsigned int shaderProg) {
@@ -363,6 +388,7 @@ struct Light {
 
 
 float rnd() { return (float)rand() / RAND_MAX; }
+GPUProgram gpuProgram; // vertex and fragment shaders
 
 class Scene {
 	std::vector<Sphere*> objects;
@@ -382,15 +408,18 @@ public:
 		float fov = 45 * M_PI / 180;
 		camera.set(eye, lookat, vup, fov);
 
-		lights.push_back(new Light(vec3(-2, 2, 0), vec3(1, 1, 1), vec3(0.9, 0.9, 0.9)));
+		lights.push_back(new Light(vec3(-1, 1, 1), vec3(1, 1, 1), vec3(0.9, 0.9, 0.9)));
 
 		vec3 kd(0.3f, 0.2f, 0.1f);
 		vec3 ks(1, 1, 1);
-		materials.push_back(new RoughMaterial(kd, ks, 50));
+		//materials.push_back(new RoughMaterial(kd, ks, 50));
 		materials.push_back(Gold());
-		//for (int i = 0; i < 250; i++) 
-			objects.push_back(new Sphere(vec3(0.5, 0.5, 0),  0.2));
-		//materials.push_back(new SmoothMaterial(vec3(0.9, 0.85, 0.8)));
+		materials.push_back(Silver());
+		materials.push_back(new RoughMaterial(vec3(0.6, 0.6, 0.4), vec3(0.1, 0.8, 0.3), vec3(1.0, 0.5, 0.5) , 20));
+		materials.push_back(new RoughMaterial(vec3(0.6, 0.6, 0.4), vec3(0.8, 0.1, 0.3), vec3(0.5, 1.0, 0.5), 20));
+		objects.push_back(new Sphere(vec3(0.4, 0.3, 0),  0.15));
+		objects.push_back(new Sphere(vec3(0.6, 0.5, 0), 0.15));
+		setMirrorMaterial(GOLD, gpuProgram.getId());
 	}
 	void SetUniform(unsigned int shaderProg) {
 		int location = glGetUniformLocation(shaderProg, "nObjects");
@@ -415,7 +444,6 @@ public:
 	}
 };
 
-GPUProgram gpuProgram; // vertex and fragment shaders
 Scene scene;
 
 class MirrorSystemManager {
@@ -444,11 +472,18 @@ public:
 		}
 
 	}
-		void increaseN() {
-			if (n < 20) {
-				n++;
-				build();
-			}
+	void increaseN() {
+		if (n < 20) {
+			n++;
+			build();
+		}
+	}
+
+	void decreaseN() {
+		if (n > 3) {
+			n--;
+			build();
+		}
 	}
 
 	void SetUniform(unsigned int shaderProg) {
@@ -462,6 +497,9 @@ public:
 			triangles[i]->SetUniform(shaderProg, i);
 	}
 };
+
+
+
 class FullScreenTexturedQuad {
 	unsigned int vao;	// vertex array object id and texture id
 public:
@@ -491,12 +529,12 @@ MirrorSystemManager mrs;
 // Initialization, create an OpenGL context
 void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
+	gpuProgram.Create(vertexSource, fragmentSource, "fragmentColor");
 	scene.build();
 	mrs.build();
 	fullScreenTexturedQuad.Create();
 
 	// create program for the GPU
-	gpuProgram.Create(vertexSource, fragmentSource, "fragmentColor");
 	gpuProgram.Use();
 }
 
@@ -519,11 +557,20 @@ void onDisplay() {
 
 // Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
-	if (key == ' ') {
+	if (key == 'r') {
 		rotate = !rotate;
 	}
 	if (key == 'a') {
 		mrs.increaseN();
+	}
+	if (key == 'd') {
+		mrs.decreaseN();
+	}
+	if (key == 'g') {
+		setMirrorMaterial(GOLD, gpuProgram.getId());
+	}
+	if (key == 's') {
+		setMirrorMaterial(SILVER, gpuProgram.getId());
 	}
 }
 
