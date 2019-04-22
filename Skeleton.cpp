@@ -1,5 +1,34 @@
 //=============================================================================================
-// Computer Graphics Sample Program: GPU ray casting
+//
+// A beadott program csak ebben a fajlban lehet, a fajl 1 byte-os ASCII karaktereket tartalmazhat, BOM kihuzando.
+// Tilos:
+// - mast "beincludolni", illetve mas konyvtarat hasznalni
+// - faljmuveleteket vegezni a printf-et kiveve
+// - Mashonnan atvett programresszleteket forrasmegjeloles nelkul felhasznalni es
+// - felesleges programsorokat a beadott programban hagyni!!!!!!! 
+// - felesleges kommenteket a beadott programba irni a forrasmegjelolest kommentjeit kiveve
+// ---------------------------------------------------------------------------------------------
+// A feladatot ANSI C++ nyelvu forditoprogrammal ellenorizzuk, a Visual Studio-hoz kepesti elteresekrol
+// es a leggyakoribb hibakrol (pl. ideiglenes objektumot nem lehet referencia tipusnak ertekul adni)
+// a hazibeado portal ad egy osszefoglalot.
+// ---------------------------------------------------------------------------------------------
+// A feladatmegoldasokban csak olyan OpenGL fuggvenyek hasznalhatok, amelyek az oran a feladatkiadasig elhangzottak 
+// A keretben nem szereplo GLUT fuggvenyek tiltottak.
+//
+// NYILATKOZAT
+// ---------------------------------------------------------------------------------------------
+// Nev    : Koncz Adam
+// Neptun : MOENI1
+// ---------------------------------------------------------------------------------------------
+// ezennel kijelentem, hogy a feladatot magam keszitettem, es ha barmilyen segitseget igenybe vettem vagy
+// mas szellemi termeket felhasznaltam, akkor a forrast es az atvett reszt kommentekben egyertelmuen jeloltem.
+// A forrasmegjeloles kotelme vonatkozik az eloadas foliakat es a targy oktatoi, illetve a
+// grafhazi doktor tanacsait kiveve barmilyen csatornan (szoban, irasban, Interneten, stb.) erkezo minden egyeb
+// informaciora (keplet, program, algoritmus, stb.). Kijelentem, hogy a forrasmegjelolessel atvett reszeket is ertem,
+// azok helyessegere matematikai bizonyitast tudok adni. Tisztaban vagyok azzal, hogy az atvett reszek nem szamitanak
+// a sajat kontribucioba, igy a feladat elfogadasarol a tobbi resz mennyisege es minosege alapjan szuletik dontes.
+// Tudomasul veszem, hogy a forrasmegjeloles kotelmenek megsertese eseten a hazifeladatra adhato pontokat
+// negativ elojellel szamoljak el es ezzel parhuzamosan eljaras is indul velem szemben.
 //=============================================================================================
 #include "framework.h"
 
@@ -8,9 +37,9 @@ const char *vertexSource = R"(
 	#version 330
     precision highp float;
 
-	uniform vec3 wLookAt, wRight, wUp;          // pos of eye
+	uniform vec3 wLookAt, wRight, wUp;          
 
-	layout(location = 0) in vec2 cCamWindowVertex;	// Attrib Array 0
+	layout(location = 0) in vec2 cCamWindowVertex;	
 	out vec3 p;
 
 	void main() {
@@ -414,19 +443,16 @@ public:
 		float fov = 45 * M_PI / 180;
 		camera.set(eye, lookat, vup, fov);
 
-		lights.push_back(new Light(vec3(-1, 2, 1), vec3(1, 1, 1), vec3(0.9, 0.9, 0.9)));
+		lights.push_back(new Light(vec3(0, 2, 1), vec3(1, 1, 1), vec3(0.9, 0.9, 0.9)));
 
-		vec3 kd(0.3f, 0.2f, 0.1f);
-		vec3 ks(1, 1, 1);
-		//materials.push_back(new RoughMaterial(kd, ks, 50));
 		materials.push_back(Gold());
 		materials.push_back(Silver());
 		materials.push_back(new RoughMaterial(vec3(0.6, 0.6, 0.4), vec3(0.1, 0.8, 0.3), vec3(1.0, 0.5, 0.5) , 100));
 		materials.push_back(new RoughMaterial(vec3(0.7, 0.5, 0.3), vec3(0.8, 0.1, 0.3), vec3(0.5, 1.0, 0.5), 100));
-		materials.push_back(new RoughMaterial(vec3(0.6, 0.6, 0.4), vec3(0.3, 0.1, 0.8), vec3(0.5, 1.0, 0.5), 100));
-		objects.push_back(new Sphere(vec3(0.4, 0.3, 0),  0.15));
-		objects.push_back(new Sphere(vec3(0.6, 0.65, 0), 0.15));
-		objects.push_back(new Sphere(vec3(0.8, 0.35, 0), 0.15));
+		materials.push_back(new RoughMaterial(vec3(0.5, 0.5, 0.8), vec3(0.2, 0.1, 0.95), vec3(0.5, 0.5, 1.0), 200));
+		objects.push_back(new Sphere(vec3(0.35, 0.43, 0),  0.15));
+		objects.push_back(new Sphere(vec3(0.65, 0.47, 0), 0.15));
+		objects.push_back(new Sphere(vec3(0.5, 0.77, 0), 0.15));
 		setMirrorMaterial(GOLD, gpuProgram.getId());
 	}
 	void SetUniform(unsigned int shaderProg) {
@@ -451,11 +477,11 @@ public:
 		camera.Animate(dt);
 	}
 
-	void doBrown(unsigned int shaderProg) {
+	void doBrown(const unsigned int shaderProg) {
 		const float d = 150.0f;
 		for (int i = 0; i < objects.size(); i++) {
 			Sphere* tmp = objects[i];
-			vec3 randomvec = vec3(rndsign() * rnd() / d, rndsign() *  rnd() / d, rndsign() *  rnd() / d);
+			const vec3 randomvec = vec3(rndsign() * rnd() / d, rndsign() * rnd() / d, 0);
 			if (validMove(tmp, randomvec)) {
 				tmp->center = tmp->center + randomvec;
 				char buffer[128];
@@ -464,12 +490,12 @@ public:
 			}
 		}
 	}
-
+private:
 	bool validMove(const Sphere* tmp, const vec3 randomvec) {
 		vec3 newcentre = tmp->center + randomvec;
 		for(int i = 0; i < objects.size(); i++)
 			if (objects[i] != tmp) 
-				if (length(newcentre - objects[i]->center) < max(tmp->radius, objects[i]->radius))
+				if (length(newcentre - objects[i]->center) < (tmp->radius + objects[i]->radius))
 					return false;
 		if (isInsideBoundaris(newcentre, tmp->radius))
 			return true;
@@ -477,17 +503,19 @@ public:
 	}
 
 	bool isInsideBoundaris(vec3 centre, float radius) {
-		return ((centre.x + radius < 1.1f && centre.x - radius > -0.1f) &&
-				(centre.y + radius < 1.1f && centre.y - radius > -0.1f) &&
+		return ((centre.x + radius < 1.0f && centre.x - radius >  0.05f) &&
+				(centre.y + radius < 1.0f && centre.y - radius >  0.05f) &&
 				(centre.z + radius < 0.4f && centre.z - radius > -0.6f));
 	}
 };
 
 Scene scene;
-float rotation = 0;
 
 class MirrorSystemManager {
 	int n = 3;
+	float rotation = 11.0f * M_PI / 6.0f;
+	const int minN = 3;
+	const int maxN = 20;
 	const float r = 0.55f;
 	std::vector<Triangle*> triangles;
 	const float rotationScale = 2 * M_PI / 360.0f;
@@ -502,8 +530,6 @@ class MirrorSystemManager {
 public:
 	void build() {
 		deleteTriangles();
-		const int minN = 3;
-		const int maxN = 10;
 		const float z0 = 0.5f;
 		const float z1 = scene.getCamera().getEye().z;
 		const vec2 centre = vec2(0.5f, 0.5f);
@@ -521,17 +547,31 @@ public:
 
 	}
 	void increaseN() {
-		if (n < 20) {
+		if (n < maxN) {
 			n++;
 			build();
 		}
 	}
 
 	void decreaseN() {
-		if (n > 3) {
+		if (n > minN) {
 			n--;
 			build();
 		}
+	}
+
+	void rotateRight() {
+		rotation += 2 * M_PI / 360.0f;
+		if (rotation >= 2 * M_PI)
+			rotation = 0;
+		build();
+	}
+
+	void rotateLeft() {
+		rotation -= 2 * M_PI / 360.0f;
+		if (rotation <= 0)
+			rotation = 2 * M_PI;
+		build();
 	}
 
 	void SetUniform(unsigned int shaderProg) {
@@ -617,13 +657,11 @@ void onKeyboard(unsigned char key, int pX, int pY) {
 	if (key == 's') {
 		setMirrorMaterial(SILVER, gpuProgram.getId());
 	}
-	if (key == 54) { //number six on numpad
-		rotation += 2 * M_PI / 360.0f;
-		mrs.build();
+	if (key == '6') { 
+		mrs.rotateRight();
 	}
-	if (key == 52) { //number four on numpad
-		rotation -= 2 * M_PI / 360.0f;
-		mrs.build();
+	if (key == '4') { 
+		mrs.rotateLeft();
 	}
 }
 
