@@ -187,7 +187,6 @@ const char *fragmentSource = R"(
 				ray.start = hit.position + hit.normal * epsilon;
 				ray.dir = reflect(ray.dir, hit.normal);
 				//outRadiance += light.La * 0.09;
-				n++;
 			} 
 		}
 		return outRadiance;
@@ -341,6 +340,7 @@ void setMirrorMaterial(mirrorType asd, unsigned int shaderProg) {
 		printf("uniform mirrorType cannot be set\n");
 }
 
+
 class Camera {
 	vec3 eye, lookat, right, up;
 	float fov;
@@ -370,6 +370,7 @@ public:
 		right.SetUniform(shaderProg, "wRight");
 		up.SetUniform(shaderProg, "wUp");
 	}
+
 };
 
 struct Light {
@@ -388,6 +389,11 @@ struct Light {
 
 
 float rnd() { return (float)rand() / RAND_MAX; }
+int rndsign(){ 
+	if (rnd() > 0.5f)
+		return 1;
+	return -1; 
+}
 GPUProgram gpuProgram; // vertex and fragment shaders
 
 class Scene {
@@ -408,17 +414,19 @@ public:
 		float fov = 45 * M_PI / 180;
 		camera.set(eye, lookat, vup, fov);
 
-		lights.push_back(new Light(vec3(-1, 1, 1), vec3(1, 1, 1), vec3(0.9, 0.9, 0.9)));
+		lights.push_back(new Light(vec3(-1, 2, 1), vec3(1, 1, 1), vec3(0.9, 0.9, 0.9)));
 
 		vec3 kd(0.3f, 0.2f, 0.1f);
 		vec3 ks(1, 1, 1);
 		//materials.push_back(new RoughMaterial(kd, ks, 50));
 		materials.push_back(Gold());
 		materials.push_back(Silver());
-		materials.push_back(new RoughMaterial(vec3(0.6, 0.6, 0.4), vec3(0.1, 0.8, 0.3), vec3(1.0, 0.5, 0.5) , 20));
-		materials.push_back(new RoughMaterial(vec3(0.6, 0.6, 0.4), vec3(0.8, 0.1, 0.3), vec3(0.5, 1.0, 0.5), 20));
+		materials.push_back(new RoughMaterial(vec3(0.6, 0.6, 0.4), vec3(0.1, 0.8, 0.3), vec3(1.0, 0.5, 0.5) , 100));
+		materials.push_back(new RoughMaterial(vec3(0.7, 0.5, 0.3), vec3(0.8, 0.1, 0.3), vec3(0.5, 1.0, 0.5), 100));
+		materials.push_back(new RoughMaterial(vec3(0.6, 0.6, 0.4), vec3(0.3, 0.1, 0.8), vec3(0.5, 1.0, 0.5), 100));
 		objects.push_back(new Sphere(vec3(0.4, 0.3, 0),  0.15));
-		objects.push_back(new Sphere(vec3(0.6, 0.5, 0), 0.15));
+		objects.push_back(new Sphere(vec3(0.6, 0.65, 0), 0.15));
+		objects.push_back(new Sphere(vec3(0.8, 0.35, 0), 0.15));
 		setMirrorMaterial(GOLD, gpuProgram.getId());
 	}
 	void SetUniform(unsigned int shaderProg) {
@@ -442,31 +450,71 @@ public:
 	void Animate(float dt) {
 		camera.Animate(dt);
 	}
+
+	void doBrown(unsigned int shaderProg) {
+		const float d = 150.0f;
+		for (int i = 0; i < objects.size(); i++) {
+			Sphere* tmp = objects[i];
+			vec3 randomvec = vec3(rndsign() * rnd() / d, rndsign() *  rnd() / d, rndsign() *  rnd() / d);
+			if (validMove(tmp, randomvec)) {
+				tmp->center = tmp->center + randomvec;
+				char buffer[128];
+				sprintf(buffer, "objects[%d].center", i);
+				tmp->center.SetUniform(shaderProg, buffer);
+			}
+		}
+	}
+
+	bool validMove(const Sphere* tmp, const vec3 randomvec) {
+		vec3 newcentre = tmp->center + randomvec;
+		for(int i = 0; i < objects.size(); i++)
+			if (objects[i] != tmp) 
+				if (length(newcentre - objects[i]->center) < max(tmp->radius, objects[i]->radius))
+					return false;
+		if (isInsideBoundaris(newcentre, tmp->radius))
+			return true;
+		return false;
+	}
+
+	bool isInsideBoundaris(vec3 centre, float radius) {
+		return ((centre.x + radius < 1.1f && centre.x - radius > -0.1f) &&
+				(centre.y + radius < 1.1f && centre.y - radius > -0.1f) &&
+				(centre.z + radius < 0.4f && centre.z - radius > -0.6f));
+	}
 };
 
 Scene scene;
+float rotation = 0;
 
 class MirrorSystemManager {
 	int n = 3;
 	const float r = 0.55f;
 	std::vector<Triangle*> triangles;
+	const float rotationScale = 2 * M_PI / 360.0f;
+	void deleteTriangles() {
+		if (!triangles.empty()) {
+			for (int i = 0; i < triangles.size(); i++)
+				delete triangles[i];
+			triangles.clear();
+		}
+	}
 
 public:
 	void build() {
-		triangles.clear();
+		deleteTriangles();
 		const int minN = 3;
 		const int maxN = 10;
 		const float z0 = 0.5f;
 		const float z1 = scene.getCamera().getEye().z;
 		const vec2 centre = vec2(0.5f, 0.5f);
-		const float offset = 2 * M_PI / n;
+		const float offset =  (2 * M_PI / n);
 		for (int i = 0; i < n; i++) {
-			const float x0 = cosf(i*offset)*r + centre.x;
+			const float x0 = cosf(rotation + i*offset)*r + centre.x;
 			const float x1 = x0;
-			const float x2 = cosf((i+1)*offset)*r + centre.x;
-			const float y0 = sinf(i*offset)*r + centre.y;
+			const float x2 = cosf(rotation + (i+1)*offset)*r + centre.x;
+			const float y0 = sinf(rotation + i*offset)*r + centre.y;
 			const float y1 = y0;
-			const float y2 = sinf((i + 1)*offset)*r + centre.y;
+			const float y2 = sinf(rotation + (i + 1)*offset)*r + centre.y;
 			triangles.push_back(new Triangle(vec3(x0, y0, z0), vec3(x1, y1, z1), vec3(x2, y2, z1)));
 			triangles.push_back(new Triangle(vec3(x2, y2, z0), vec3(x0, y0, z0), vec3(x2, y2, z1)));
 		}
@@ -526,7 +574,7 @@ public:
 
 FullScreenTexturedQuad fullScreenTexturedQuad;
 MirrorSystemManager mrs;
-// Initialization, create an OpenGL context
+
 void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
 	gpuProgram.Create(vertexSource, fragmentSource, "fragmentColor");
@@ -534,28 +582,25 @@ void onInitialization() {
 	mrs.build();
 	fullScreenTexturedQuad.Create();
 
-	// create program for the GPU
 	gpuProgram.Use();
 }
 
 bool rotate = false;
-// Window has become invalid: Redraw
+
 void onDisplay() {
 	static int nFrames = 0;
 	nFrames++;
 	static long tStart = glutGet(GLUT_ELAPSED_TIME);
 	long tEnd = glutGet(GLUT_ELAPSED_TIME);
-	printf("%d msec\r", (tEnd - tStart) / nFrames);
 
-	glClearColor(1.0f, 0.5f, 0.8f, 1.0f);							// background color 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the screen
+	glClearColor(1.0f, 0.5f, 0.8f, 1.0f);							
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
 	scene.SetUniform(gpuProgram.getId());
 	mrs.SetUniform(gpuProgram.getId());
 	fullScreenTexturedQuad.Draw();
-	glutSwapBuffers();									// exchange the two buffers
+	glutSwapBuffers();								
 }
 
-// Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
 	if (key == 'r') {
 		rotate = !rotate;
@@ -572,6 +617,14 @@ void onKeyboard(unsigned char key, int pX, int pY) {
 	if (key == 's') {
 		setMirrorMaterial(SILVER, gpuProgram.getId());
 	}
+	if (key == 54) { //number six on numpad
+		rotation += 2 * M_PI / 360.0f;
+		mrs.build();
+	}
+	if (key == 52) { //number four on numpad
+		rotation -= 2 * M_PI / 360.0f;
+		mrs.build();
+	}
 }
 
 void onKeyboardUp(unsigned char key, int pX, int pY) {}
@@ -581,5 +634,6 @@ void onMouseMotion(int pX, int pY) {}
 void onIdle() {
 	if(rotate)
 		scene.Animate(0.01);
+	scene.doBrown(gpuProgram.getId());
 	glutPostRedisplay();
 }
