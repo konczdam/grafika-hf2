@@ -99,12 +99,25 @@ const char *fragmentSource = R"(
 	out vec4 fragmentColor;		
 
 	Hit intersect(const Sphere object, const Ray ray) {
+		float radiusZ = 0.1;
+		float radiusX = 0.2;
+		float radiusY = 0.1;
 		Hit hit;
 		hit.t = -1;
 		vec3 dist = ray.start - object.center;
-		float a = dot(ray.dir, ray.dir);
-		float b = dot(dist, ray.dir) * 2.0;
-		float c = dot(dist, dist) - object.radius * object.radius;
+		
+		vec3 dir = normalize(ray.dir);
+		float a = ((dir.x * dir.x) / (radiusX*radiusX) +
+				 (dir.y*dir.y)    / (radiusY*radiusY)	+
+				 (dir.z*dir.z)    / (radiusZ*radiusZ));
+		float b = ((2.0 * dir.x*dist.x) / (radiusX*radiusX) +
+				(2.0 * dir.y*dist.y) / (radiusY*radiusY) +
+					(2.0 * dir.z*dist.z) / (radiusZ*radiusZ));
+		float c = ((dist.x*dist.x) / (radiusX*radiusX) +
+				(dist.y*dist.y) / (radiusY*radiusY)  +
+				(dist.z*dist.z) / (radiusZ*radiusZ))  - 1.0f;
+
+
 		float discr = b * b - 4.0 * a * c;
 		if (discr < 0)
 		   return hit;
@@ -115,7 +128,12 @@ const char *fragmentSource = R"(
 		float t2 = (-b - sqrt_discr) / 2.0 / a;
 		hit.t = (t2 > 0) ? t2 : t1;
 		hit.position = ray.start + ray.dir * hit.t;
-		hit.normal = (hit.position - object.center) / object.radius;
+		vec3 intersect = ray.start + dir*hit.t;
+		vec3 normal = intersect - object.center;
+		hit.normal.x = 2.0 * normal.x / (radiusX * radiusX);
+		hit.normal.y = 2.0 * normal.y / (radiusY * radiusY);
+		hit.normal.z = 2.0 * normal.z / (radiusZ * radiusZ);
+		hit.normal = normalize(hit.normal);
 		return hit;
 	}
 
@@ -162,7 +180,7 @@ const char *fragmentSource = R"(
 		for (int o = 0; o < nObjects; o++) 
 			if (intersect(objects[o], ray).t > 0)
 			   return true; //  hit.t < 0 if no intersection
-		 for (int o = 0; o < nObjects; o++) {
+		 for (int o = 0; o < nTriangles; o++) {
 			if(intersectWithTriangle(triangles[o], ray).t > 0)
 				return true;
 		}
@@ -428,7 +446,7 @@ public:
 	}
 private:	
 	void setCamera(){
-		vec3 eye = vec3(0.5f, 0.5f, 11.0f);
+		vec3 eye = vec3(0.5f, 0.5f, 2.0f);
 		vec3 vup = vec3(0.0f, 1.0f, 0.0f);
 		vec3 lookat = vec3(0.5f, 0.5f, 0.0f);
 		float fov = 45.0f * (float)M_PI / 180.0f;
@@ -543,14 +561,14 @@ public:
 		}
 
 	}
-	void increaseN() {
+	void increaseNumberOfMirrors() {
 		if (n < maxN) {
 			n++;
 			build();
 		}
 	}
 
-	void decreaseN() {
+	void decreaseNumberOfMirrors() {
 		if (n > minN) {
 			n--;
 			build();
@@ -643,10 +661,10 @@ void onKeyboard(unsigned char key, int pX, int pY) {
 		rotate = !rotate;
 	}
 	if (key == 'a') {
-		mrs.increaseN();
+		mrs.increaseNumberOfMirrors();
 	}
 	if (key == 'd') {
-		mrs.decreaseN();
+		mrs.decreaseNumberOfMirrors();
 	}
 	if (key == 'g') {
 		setMirrorMaterial(GOLD, gpuProgram.getId());
@@ -669,6 +687,6 @@ void onMouseMotion(int pX, int pY) {}
 void onIdle() {
 	if(rotate)
 		scene.Animate(0.01f);
-	scene.doBrown(gpuProgram.getId());
+	//scene.doBrown(gpuProgram.getId());
 	glutPostRedisplay();
 }
