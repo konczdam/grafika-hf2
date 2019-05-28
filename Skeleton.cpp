@@ -75,9 +75,12 @@ const char *fragmentSource = R"(
 		vec3 start, dir;
 	};
 
-	struct Sphere {
+	struct Ellipsoid {
 		vec3 center;
 		float radius;
+		float radiusX;
+		float radiusY;
+		float radiusZ;
 	};
 
 	struct Triangle{
@@ -90,7 +93,7 @@ const char *fragmentSource = R"(
 	uniform Light light;     
 	uniform Material materials[5];  
 	uniform int nObjects;
-	uniform Sphere objects[10];
+	uniform Ellipsoid objects[10];
 	uniform int nTriangles;
 	uniform int mirrorType;
 	uniform Triangle triangles[nMaxTriangles];
@@ -98,10 +101,10 @@ const char *fragmentSource = R"(
 	in  vec3 p;					
 	out vec4 fragmentColor;		
 
-	Hit intersect(const Sphere object, const Ray ray) {
-		float radiusZ = 0.1;
-		float radiusX = 0.2;
-		float radiusY = 0.1;
+	Hit intersect(const Ellipsoid object, const Ray ray) {
+		float radiusZ = object.radiusZ;
+		float radiusX = object.radiusX;
+		float radiusY = object.radiusY;
 		Hit hit;
 		hit.t = -1;
 		vec3 dist = ray.start - object.center;
@@ -197,7 +200,6 @@ const char *fragmentSource = R"(
 	vec3 trace(Ray ray) {
 		vec3 weight = vec3(1, 1, 1);
 		vec3 outRadiance = vec3(0.0, 0.0, 0.0);
-		int n = 0;
 
 		for(int d = 0; d < maxdepth; d++) {
 			Hit hit = firstIntersect(ray);
@@ -225,7 +227,6 @@ const char *fragmentSource = R"(
 				weight *= Fresnel(materials[hit.mat].F0, dot(-ray.dir, hit.normal));
 				ray.start = hit.position + hit.normal * epsilon;
 				ray.dir = reflect(ray.dir, hit.normal);
-				//outRadiance += light.La * 0.09;
 			} 
 		}
 		return outRadiance;
@@ -249,22 +250,22 @@ public:
 	
 	void SetUniform(unsigned int shaderProg, int mat) {
 		char buffer[256];
-		sprintf_s(buffer, "materials[%d].ka", mat);
+		sprintf(buffer, "materials[%d].ka", mat);
 		ka.SetUniform(shaderProg, buffer);
-		sprintf_s(buffer, "materials[%d].kd", mat);
+		sprintf(buffer, "materials[%d].kd", mat);
 		kd.SetUniform(shaderProg, buffer);
-		sprintf_s(buffer, "materials[%d].ks", mat);
+		sprintf(buffer, "materials[%d].ks", mat);
 		ks.SetUniform(shaderProg, buffer);
-		sprintf_s(buffer, "materials[%d].shininess", mat);
+		sprintf(buffer, "materials[%d].shininess", mat);
 		int location = glGetUniformLocation(shaderProg, buffer);
 		if (location >= 0) glUniform1f(location, shininess); else printf("uniform material.shininess cannot be set\n");
-		sprintf_s(buffer, "materials[%d].F0", mat);
+		sprintf(buffer, "materials[%d].F0", mat);
 		F0.SetUniform(shaderProg, buffer);
 
-		sprintf_s(buffer, "materials[%d].rough", mat);
+		sprintf(buffer, "materials[%d].rough", mat);
 		location = glGetUniformLocation(shaderProg, buffer);
 		if (location >= 0) glUniform1i(location, rough ? 1 : 0); else printf("uniform material.rough cannot be set\n");
-		sprintf_s(buffer, "materials[%d].reflective", mat);
+		sprintf(buffer, "materials[%d].reflective", mat);
 		location = glGetUniformLocation(shaderProg, buffer);
 		if (location >= 0) glUniform1i(location, reflective ? 1 : 0); else printf("uniform material.reflective cannot be set\n");
 	}
@@ -315,24 +316,40 @@ enum mirrorType {
 	SILVER = 1
 };
 
-struct Sphere {
+struct Ellipsoid {
 	vec3 center;
-	float radius;
+	float radiusX,radiusY,radiusZ;
 
-	Sphere(const vec3& _center, float _radius) { 
+	Ellipsoid(const vec3& _center, float _radiusX, float _radiusY, float _radiusZ) { 
 		center = _center; 
-		radius = _radius; 
+		radiusX = _radiusX;
+		radiusY = _radiusY;
+		radiusZ = _radiusZ;
 	}
 
 	void SetUniform(unsigned int shaderProg, int o) {
 		char buffer[256];
-		sprintf_s(buffer, "objects[%d].center", o);
+		sprintf(buffer, "objects[%d].center", o);
 		center.SetUniform(shaderProg, buffer);
-		sprintf_s(buffer, "objects[%d].radius", o);
+		sprintf(buffer, "objects[%d].radiusX", o);
 		int location = glGetUniformLocation(shaderProg, buffer);
 		if (location >= 0) 
-			glUniform1f(location, radius);
+			glUniform1f(location, radiusX);
 		else 
+			printf("uniform %s cannot be set\n", buffer);
+
+		sprintf(buffer, "objects[%d].radiusY", o);
+		 location = glGetUniformLocation(shaderProg, buffer);
+		if (location >= 0)
+			glUniform1f(location, radiusY);
+		else
+			printf("uniform %s cannot be set\n", buffer);
+
+		sprintf(buffer, "objects[%d].radiusZ", o);
+		 location = glGetUniformLocation(shaderProg, buffer);
+		if (location >= 0)
+			glUniform1f(location, radiusZ);
+		else
 			printf("uniform %s cannot be set\n", buffer);
 	}
 };
@@ -348,13 +365,13 @@ struct Triangle {
 
 	void SetUniform(unsigned int shaderProg, int o) {
 		char buffer[256];
-		sprintf_s(buffer, "triangles[%d].p1", o);
+		sprintf(buffer, "triangles[%d].p1", o);
 		p1.SetUniform(shaderProg, buffer);
-		sprintf_s(buffer, "triangles[%d].p2", o);
+		sprintf(buffer, "triangles[%d].p2", o);
 		p2.SetUniform(shaderProg, buffer);
-		sprintf_s(buffer, "triangles[%d].p3", o);
+		sprintf(buffer, "triangles[%d].p3", o);
 		p3.SetUniform(shaderProg, buffer);
-		sprintf_s(buffer, "triangles[%d].n", o);
+		sprintf(buffer, "triangles[%d].n", o);
 		n.SetUniform(shaderProg, buffer);
 	}
 };
@@ -375,6 +392,13 @@ public:
 	vec3 getEye() {
 		return eye;
 	}
+
+	void Animate(float dt) {
+		eye = vec3((eye.x - lookat.x) * cos(dt) + (eye.z - lookat.z) * sin(dt) + lookat.x,
+			eye.y,
+			-(eye.x - lookat.x) * sin(dt) + (eye.z - lookat.z) * cos(dt) + lookat.z);
+		set(eye, lookat, up, fov);
+	}
 	
 	void set(vec3 _eye, vec3 _lookat, vec3 vup, float _fov) {
 		eye = _eye;
@@ -384,12 +408,6 @@ public:
 		float f = length(w);
 		right = normalize(cross(vup, w)) * f * tan(fov / 2);
 		up = normalize(cross(w, right)) * f * tan(fov / 2);
-	}
-	void Animate(float dt) {
-		eye = vec3((eye.x - lookat.x) * cos(dt) + (eye.z - lookat.z) * sin(dt) + lookat.x,
-					eye.y,
-					-(eye.x - lookat.x) * sin(dt) + (eye.z - lookat.z) * cos(dt) + lookat.z);
-		set(eye, lookat, up, fov);
 	}
 	void SetUniform(unsigned int shaderProg) {
 		eye.SetUniform(shaderProg, "wEye");
@@ -427,7 +445,7 @@ int rndsign(){
 GPUProgram gpuProgram;
 
 class Scene {
-	std::vector<Sphere*> objects;
+	std::vector<Ellipsoid*> objects;
 	std::vector<Light*> lights;
 	std::vector<Material*> materials;
 	Camera camera;
@@ -435,18 +453,20 @@ public:
 	Camera getCamera() {
 		return camera;
 	}
-	
+	void Animate(float dt) {
+		camera.Animate(dt);
+	}
 	void build() {
 		setCamera();
 		addLigths();
 		addMirrorMaterials();
 		addRoughMaterials();
-		addSpheres();
+		addEllipsoids();
 		setMirrorMaterial(GOLD, gpuProgram.getId());
 	}
 private:	
 	void setCamera(){
-		vec3 eye = vec3(0.5f, 0.5f, 2.0f);
+		vec3 eye = vec3(0.5f, 0.5f, 8.0f);
 		vec3 vup = vec3(0.0f, 1.0f, 0.0f);
 		vec3 lookat = vec3(0.5f, 0.5f, 0.0f);
 		float fov = 45.0f * (float)M_PI / 180.0f;
@@ -464,10 +484,10 @@ private:
 		materials.push_back(new RoughMaterial(vec3(0.7f, 0.5f, 0.3f), vec3(0.8f, 0.1f, 0.3f), vec3(0.5f, 1.0f, 0.5f), 100.0f));
 		materials.push_back(new RoughMaterial(vec3(0.5f, 0.5f, 0.8f), vec3(0.2f, 0.1f, 0.95f), vec3(0.5f, 0.5f, 1.0f), 200.0f));
 	}
-	void addSpheres(){
-		objects.push_back(new Sphere(vec3(0.35f, 0.44f, 0.0f), 0.15f));
-		objects.push_back(new Sphere(vec3(0.66f, 0.44f, 0.0f), 0.15f));
-		objects.push_back(new Sphere(vec3(0.505f, 0.69f, 0.0f), 0.15f));
+	void addEllipsoids(){
+		objects.push_back(new Ellipsoid(vec3(0.35f, 0.44f, 0.0f), 0.1f, 0.2f, 0.1f));
+		objects.push_back(new Ellipsoid(vec3(0.66f, 0.44f, 0.0f), 0.15, 0.1f, 0.1f));
+		objects.push_back(new Ellipsoid(vec3(0.505f, 0.69f, 0.0f), 0.12f, 0.14f, 0.1f));
 	}
 
 public:
@@ -487,40 +507,33 @@ public:
 		for (unsigned int mat = 0; mat < materials.size(); mat++)
 			materials[mat]->SetUniform(shaderProg, mat);
 	}
-	
-	void Animate(float dt) {
-		camera.Animate(dt);
-	}
+
 
 	void doBrown(const unsigned int shaderProg) {
-		const float d = 150.0f;
+		const float d = 200.0f;
 		for (unsigned int i = 0; i < objects.size(); i++) {
-			Sphere* tmp = objects[i];
+			Ellipsoid* tmp = objects[i];
 			const vec3 randomvec = vec3(rndsign() * rnd() / d, rndsign() * rnd() / d, 0);
 			if (validMove(tmp, randomvec)) {
 				tmp->center = tmp->center + randomvec;
 				char buffer[128];
-				sprintf_s(buffer, "objects[%d].center", i);
+				sprintf(buffer, "objects[%d].center", i);
 				tmp->center.SetUniform(shaderProg, buffer);
 			}
 		}
 	}
 private:
-	bool validMove(const Sphere* tmp, const vec3 randomvec) {
+	bool validMove(const Ellipsoid* tmp, const vec3 randomvec) {
 		vec3 newcentre = tmp->center + randomvec;
 		for(unsigned int i = 0; i < objects.size(); i++)
-			if (objects[i] != tmp) 
-				if (length(newcentre - objects[i]->center) < (tmp->radius + objects[i]->radius))
-					return false;
-		if (isInsideBoundaris(newcentre, tmp->radius))
+		if (isInsideBoundaris(newcentre))
 			return true;
 		return false;
 	}
 
-	bool isInsideBoundaris(vec3 centre, float radius) {
-		return ((centre.x + radius < 1.0f && centre.x - radius >  0.05f) &&
-				(centre.y + radius < 1.0f && centre.y - radius >  0.05f) &&
-				(centre.z + radius < 0.4f && centre.z - radius > -0.6f));
+	bool isInsideBoundaris(vec3 centre) {
+		return ((centre.x < 0.8f && centre.x >  0.05f) &&
+			(centre.y < 1.0f && centre.y >  0.05f));
 	}
 };
 
@@ -636,11 +649,9 @@ void onInitialization() {
 	scene.build();
 	mrs.build();
 	fullScreenTexturedQuad.Create();
-
 	gpuProgram.Use();
 }
 
-bool rotate = false;
 
 void onDisplay() {
 	static int nFrames = 0;
@@ -656,6 +667,7 @@ void onDisplay() {
 	glutSwapBuffers();								
 }
 
+bool rotate = false;
 void onKeyboard(unsigned char key, int pX, int pY) {
 	if (key == 'r') {
 		rotate = !rotate;
@@ -685,8 +697,8 @@ void onMouse(int button, int state, int pX, int pY) {}
 void onMouseMotion(int pX, int pY) {}
 
 void onIdle() {
-	if(rotate)
+	if (rotate)
 		scene.Animate(0.01f);
-	//scene.doBrown(gpuProgram.getId());
+	scene.doBrown(gpuProgram.getId());
 	glutPostRedisplay();
 }
