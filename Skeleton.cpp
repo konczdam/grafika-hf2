@@ -1,3 +1,5 @@
+/* Azért 1 fájlban van minden kód, mert a feladatbeadó portál így kérte
+   és nem volt kedvem beadás után foglalkozni a projekttel. */
 #include "framework.h";
 
 
